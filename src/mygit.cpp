@@ -16,5 +16,7 @@ int main(int argc, char **argv) {
         return cmd_init();
     } else if (cmd == "hash-object") {
         return cmd_hash_object(args);
+    }  else if (cmd == "cat-file") {
+        return cmd_cat_file(args);
     }
 }

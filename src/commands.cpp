@@ -43,3 +43,36 @@ int cmd_hash_object(const vector<string> &args) {
     cout << sha << "\n";
     return 0;
 }
+
+int cmd_cat_file(const vector<string> &args) {
+    if (!repo_exists()) {
+        cerr << "fatal: not a mygit repository (or any parent up to mount point)\n";
+        return 1;
+    }
+    if (args.size() < 2) {
+        cerr << "usage: mygit cat-file <flag> <object_sha>\n";
+        cerr << "  -p : print contents\n";
+        cerr << "  -t : print type\n";
+        cerr << "  -s : print size in bytes\n";
+        return 1;
+    }
+    string flag = args[0];
+    string sha = args[1];
+    auto p = read_object(sha);
+    if (p.first.empty()) {
+        cerr << "error: object not found: " << sha << "\n";
+        return 1;
+    }
+    if (flag == "-p") {
+        cout << p.second;
+        if (p.second.empty() || p.second.back() != '\n') cout << '\n';
+    } else if (flag == "-t") {
+        cout << p.first << "\n";
+    } else if (flag == "-s") {
+        cout << p.second.size() << "\n";
+    } else {
+        cerr << "unknown flag: " << flag << "\n";
+        return 1;
+    }
+    return 0;
+}

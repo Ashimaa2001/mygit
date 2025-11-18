@@ -134,6 +134,23 @@ string hash_object_from_data(const string &type, const string &data, bool write)
     return sha;
 }
 
+pair<string,string> read_object(const string &sha) {
+    string path = object_path_for_sha(sha);
+    string compressed = read_file(path);
+    if (compressed.empty()) return {"",""};
+    
+    string buf = decompress_data(compressed);
+    if (buf.empty()) return {"",""};
+    size_t pos = buf.find('\0');
+    if (pos == string::npos) return {"",""};
+    string hdr = buf.substr(0, pos);
+    string data = buf.substr(pos + 1);
+    size_t sp = hdr.find(' ');
+    if (sp == string::npos) return {"",""};
+    string type = hdr.substr(0, sp);
+    return {type, data};
+}
+
 bool repo_exists() {
     struct stat st;
     return stat(REPO_DIR.c_str(), &st) == 0 && S_ISDIR(st.st_mode);

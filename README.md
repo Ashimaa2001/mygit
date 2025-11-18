@@ -7,6 +7,14 @@ A simple version control system inspired by Git. Designed to help manage code ve
 ./mygit init
 
 # Hash a file and store it
-./mygit hash-object -w README.md
+./mygit hash-object -w <file_path>
 
+# Display object type
+./mygit cat-file -t <sha>
+
+# Display object size
+./mygit cat-file -s <sha>
+
+# Display object content
+./mygit cat-file -p <sha>
 ```
