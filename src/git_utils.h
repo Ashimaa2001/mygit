@@ -1,0 +1,32 @@
+#ifndef GIT_UTILS_H
+#define GIT_UTILS_H
+
+#include <string>
+#include <utility>
+#include <vector>
+#include <unordered_map>
+
+
+extern const std::string REPO_DIR;
+
+using namespace std;
+
+string to_hex(const unsigned char *hash, size_t len);
+string sha1_hex(const string &data);
+
+bool ensure_dir(const string &path);
+string read_file(const string &path);
+bool write_file(const string &path, const string &data);
+
+string compress_data(const string &data);  
+
+string object_path_for_sha(const string &sha);
+string build_object_buffer(const string &type, const string &data);
+string hash_object_from_data(const string &type, const string &data, bool write);
+
+pair<string, string> read_object(const string &sha);
+bool repo_exists();
+
+string write_tree_recursive(const string &path);
+
+#endif // GIT_UTILS_H
