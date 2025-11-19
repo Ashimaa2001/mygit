@@ -20,5 +20,7 @@ int main(int argc, char **argv) {
         return cmd_cat_file(args);
     } else if (cmd == "write-tree") {
         return cmd_write_tree();
+    } else if (cmd == "ls-tree") {
+        return cmd_ls_tree(args);
     }
 }

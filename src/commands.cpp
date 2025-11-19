@@ -90,3 +90,56 @@ int cmd_write_tree() {
     cout << sha << "\n";
     return 0;
 }
+
+int cmd_ls_tree(const vector<string> &args) {
+    if (!repo_exists()) {
+        cerr << "fatal: not a mygit repository\n";
+        return 1;
+    }
+    bool name_only = false;
+    string sha;
+    if (args.size() == 1) {
+        sha = args[0];
+    } else if (args.size() == 2) {
+        if (args[0] == "--name-only") {
+            name_only = true;
+            sha = args[1];
+        } else {
+            cerr << "usage: mygit ls-tree [--name-only] <tree_sha>\n";
+            return 1;
+        }
+    } else {
+        cerr << "usage: mygit ls-tree [--name-only] <tree_sha>\n";
+        return 1;
+    }
+    auto p = read_object(sha);
+    if (p.first.empty()) {
+        cerr << "error: object not found: " << sha << "\n";
+        return 1;
+    }
+    if (p.first != "tree") {
+        cerr << "error: object is not a tree: " << sha << "\n";
+        return 1;
+    }
+
+    istringstream ss(p.second);
+    string line;
+    while (getline(ss, line)) {
+        if (line.empty()) continue;
+        size_t tab = line.find('\t');
+        string left = (tab == string::npos) ? line : line.substr(0, tab);
+        string entry_sha = (tab == string::npos) ? string() : line.substr(tab + 1);
+
+        size_t sp = left.find(' ');
+        string mode, name;
+        if (sp != string::npos) {
+            mode = left.substr(0, sp);
+            name = left.substr(sp + 1);
+        } else {
+            name = left;
+        }
+        if (name_only) cout << name << "\n";
+        else cout << mode << " " << name << "\t" << entry_sha << "\n";
+    }
+    return 0;
+}
