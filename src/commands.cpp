@@ -143,3 +143,101 @@ int cmd_ls_tree(const vector<string> &args) {
     }
     return 0;
 }
+
+static void collect_files_recursive(const filesystem::path &path, const filesystem::path &base, vector<string> &out) {
+    for (auto &p: filesystem::directory_iterator(path)) {
+        string filename = p.path().filename().string();
+        if (filename[0] == '.') continue;
+        
+        if (filesystem::is_directory(p.path())) {
+            collect_files_recursive(p.path(), base, out);
+        } else if (filesystem::is_regular_file(p.path())) {
+            filesystem::path rel = filesystem::relative(p.path(), base);
+            out.push_back(rel.string());
+        }
+    }
+}
+
+int cmd_add(const vector<string> &args) {
+    if (!repo_exists()) {
+        cerr << "fatal: not a mygit repository\n";
+        return 1;
+    }
+    vector<string> files;
+    if (args.size() == 0) {
+        cerr << "usage: mygit add . | <paths...>\n";
+        return 1;
+    }
+    filesystem::path cwd = filesystem::current_path();
+    
+    if (args.size() == 1 && args[0] == ".") {
+        collect_files_recursive(cwd, cwd, files);
+    } else {
+        for (auto &a: args) {
+            filesystem::path p(a);
+            if (!filesystem::exists(p)) {
+                cerr << "warning: path does not exist: " << a << "\n";
+                continue;
+            }
+            if (filesystem::is_directory(p)) {
+                collect_files_recursive(p, cwd, files);
+            } else if (filesystem::is_regular_file(p)) {
+                filesystem::path rel = filesystem::relative(p, cwd);
+                files.push_back(rel.string());
+            }
+        }
+    }
+    if (files.empty()) return 0;
+    if (!add_files_to_index(files)) {
+        cerr << "error: failed to add files to index\n";
+        return 1;
+    }
+    return 0;
+}
+
+int cmd_commit(const vector<string> &args) {
+    if (!repo_exists()) {
+        cerr << "fatal: not a mygit repository\n";
+        return 1;
+    }
+    string message;
+
+    if (args.size() >= 2 && args[0] == "-m") {
+        message = args[1];
+    } else if (args.size() == 0) {
+
+        cerr << "reading commit message from stdin (ctrl-D to end):\n";
+        string line;
+        while (getline(cin, line)) {
+            message += line + "\n";
+        }
+    } else {
+        cerr << "usage: mygit commit [-m <message>]\n";
+        return 1;
+    }
+    if (message.empty()) {
+        cerr << "error: commit message cannot be empty\n";
+        return 1;
+    }
+
+    string tree_sha = build_tree_from_index();
+    if (tree_sha.empty()) {
+        cerr << "error: failed to write tree\n";
+        return 1;
+    }
+
+    string head_ref = read_head();
+    string parent_sha;
+    if (!head_ref.empty() && head_ref.find("refs/") != string::npos) {
+        parent_sha = read_ref(head_ref);
+    }
+
+    string commit_sha = create_commit_object(tree_sha, message, parent_sha);
+
+    if (!write_ref(head_ref, commit_sha)) {
+        cerr << "error: failed to write ref\n";
+        return 1;
+    }
+    cout << commit_sha << "\n";
+    return 0;
+}

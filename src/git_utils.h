@@ -32,4 +32,18 @@ string write_tree_recursive(const string &path);
 vector<tuple<string,string,string>> read_index();
 string build_tree_from_index_entries(const vector<tuple<string,string,string>> &entries);
 
+string build_tree_from_index();  
+bool add_files_to_index(const vector<string> &files);
+
+string read_head();  
+string read_ref(const string &ref);
+bool write_ref(const string &ref, const string &sha);
+string create_commit_object(const string &tree_sha, const string &message, const string &parent_sha);
+
+struct CommitInfo {
+    string parent;
+    string author;
+    string message;
+};
+
 #endif // GIT_UTILS_H

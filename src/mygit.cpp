@@ -22,5 +22,9 @@ int main(int argc, char **argv) {
         return cmd_write_tree();
     } else if (cmd == "ls-tree") {
         return cmd_ls_tree(args);
+    } else if (cmd == "add") {
+        return cmd_add(args);
+    } else if (cmd == "commit") {
+        return cmd_commit(args);
     }
 }

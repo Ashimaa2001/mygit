@@ -244,3 +244,91 @@ string write_tree_recursive(const string &path) {
     vector<tuple<string,string,string>> entries = read_index();
     return build_tree_from_index_entries(entries);
 }
+
+bool write_index(const vector<tuple<string,string,string>> &entries) {
+    ostringstream ss;
+    for (auto &e: entries) {
+        ss << get<1>(e) << " " << get<0>(e) << "\t" << get<2>(e) << "\n";
+    }
+    return write_file(REPO_DIR + "/index", ss.str());
+}
+
+bool add_files_to_index(const vector<string> &files) {
+    vector<tuple<string,string,string>> index = read_index();
+    
+    unordered_map<string,string> m;
+    for (auto &e: index) m[get<0>(e)] = get<2>(e);
+
+    for (const string &f: files) {
+        string data;
+        try {
+            data = read_file(f);
+        } catch (...) { data = string(); }
+        if (data.empty() && access(f.c_str(), F_OK) != 0) {
+            continue;
+        }
+        string sha = hash_object_from_data("blob", data, true);
+        m[f] = sha;
+    }
+
+    vector<tuple<string,string,string>> out;
+    out.reserve(m.size());
+    for (auto &kv: m) out.emplace_back(kv.first, "100644", kv.second);
+    
+    sort(out.begin(), out.end(), [](auto &a, auto &b){ return get<0>(a) < get<0>(b); });
+    return write_index(out);
+}
+
+
+string build_tree_from_index() {
+    vector<tuple<string,string,string>> entries = read_index();
+    return build_tree_from_index_entries(entries);
+}
+
+
+string read_head() {
+    string head_file = REPO_DIR + "/HEAD";
+    string content = read_file(head_file);
+    
+    if (content.find("ref:") != string::npos) {
+        // extract ref
+        size_t pos = content.find("refs/");
+        if (pos != string::npos) {
+            string ref = content.substr(pos);
+            while (!ref.empty() && (ref.back() == '\n' || ref.back() == '\r')) ref.pop_back();
+            return ref;
+        }
+    }
+    while (!content.empty() && (content.back() == '\n' || content.back() == '\r')) content.pop_back();
+    return content;
+}
+
+string read_ref(const string &ref) {
+    string path = REPO_DIR + "/" + ref;
+    string content = read_file(path);
+    while (!content.empty() && (content.back() == '\n' || content.back() == '\r')) content.pop_back();
+    return content;
+}
+
+bool write_ref(const string &ref, const string &sha) {
+    string path = REPO_DIR + "/" + ref;
+    return write_file(path, sha + "\n");
+}
+
+string create_commit_object(const string &tree_sha, const string &message, const string &parent_sha) {
+    time_t now = time(nullptr);
+    ostringstream ss;
+    ss << "tree " << tree_sha << "\n";
+    if (!parent_sha.empty()) {
+        ss << "parent " << parent_sha << "\n";
+    }
+    ss << "author mygit <mygit@example.com> " << now << " +0000\n";
+    ss << "committer mygit <mygit@example.com> " << now << " +0000\n";
+    ss << "\n" << message;
+    if (!message.empty() && message.back() != '\n') {
+        ss << "\n";
+    }
+    
+    string commit_data = ss.str();
+    return hash_object_from_data("commit", commit_data, true);
+}
