@@ -18,5 +18,7 @@ int main(int argc, char **argv) {
         return cmd_hash_object(args);
     }  else if (cmd == "cat-file") {
         return cmd_cat_file(args);
+    } else if (cmd == "write-tree") {
+        return cmd_write_tree();
     }
 }

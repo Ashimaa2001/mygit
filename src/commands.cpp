@@ -76,3 +76,17 @@ int cmd_cat_file(const vector<string> &args) {
     }
     return 0;
 }
+
+int cmd_write_tree() {
+    if (!repo_exists()) {
+        cerr << "fatal: not a mygit repository\n";
+        return 1;
+    }
+    string sha = write_tree_recursive(".");
+    if (sha.empty()) {
+        cerr << "error: failed to write tree\n";
+        return 1;
+    }
+    cout << sha << "\n";
+    return 0;
+}

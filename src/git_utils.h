@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 #include <unordered_map>
+#include <map>
 
 
 extern const std::string REPO_DIR;
@@ -28,5 +29,7 @@ pair<string, string> read_object(const string &sha);
 bool repo_exists();
 
 string write_tree_recursive(const string &path);
+vector<tuple<string,string,string>> read_index();
+string build_tree_from_index_entries(const vector<tuple<string,string,string>> &entries);
 
 #endif // GIT_UTILS_H

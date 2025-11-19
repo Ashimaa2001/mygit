@@ -17,4 +17,7 @@ A simple version control system inspired by Git. Designed to help manage code ve
 
 # Display object content
 ./mygit cat-file -p <sha>
+
+# Create tree objects for current directory
+./mygit write-tree
 ```

@@ -156,36 +156,91 @@ bool repo_exists() {
     return stat(REPO_DIR.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
 }
 
-string write_tree_recursive(const string &path) {
+vector<tuple<string,string,string>> read_index() {
     vector<tuple<string,string,string>> entries;
-    DIR *dp = opendir(path.c_str());
-    if (!dp) return string();
-    struct dirent *de;
-    while ((de = readdir(dp)) != nullptr) {
-        string name = de->d_name;
-        if (name == "." || name == "..") continue;
-        // skip hidden directories (starting with .)
-        if (name[0] == '.') continue;
-        string full = path == "." ? name : path + "/" + name;
-        struct stat st;
-        if (stat(full.c_str(), &st) != 0) continue;
-        if (S_ISDIR(st.st_mode)) {
-            string child_sha = write_tree_recursive(full);
-            if (child_sha.empty()) continue;
-            entries.emplace_back(name, string("40000"), child_sha);
-        } else if (S_ISREG(st.st_mode)) {
-            string data = read_file(full);
-            string sha = hash_object_from_data("blob", data, true);
-            entries.emplace_back(name, string("100644"), sha);
+    string index_path = REPO_DIR + "/index";
+    string content = read_file(index_path);
+    if (content.empty()) return entries;
+    
+    istringstream iss(content);
+    string line;
+    while (getline(iss, line)) {
+        if (line.empty()) continue;
+        size_t tab_pos = line.rfind('\t');
+        if (tab_pos == string::npos) continue;
+        
+        string mode_path = line.substr(0, tab_pos);
+        string sha = line.substr(tab_pos + 1);
+        
+        size_t space_pos = mode_path.find(' ');
+        if (space_pos == string::npos) continue;
+        
+        string mode = mode_path.substr(0, space_pos);
+        string filepath = mode_path.substr(space_pos + 1);
+        
+        entries.emplace_back(filepath, mode, sha);
+    }
+    return entries;
+}
+
+string build_tree_from_index_entries(const vector<tuple<string,string,string>> &entries) {
+    if (entries.empty()) return string();
+    
+    map<string, vector<tuple<string,string,string>>> dir_entries;
+    
+    for (const auto &entry : entries) {
+        string filepath = get<0>(entry);
+        string mode = get<1>(entry);
+        string sha = get<2>(entry);
+        
+        size_t last_slash = filepath.rfind('/');
+        string dir = (last_slash == string::npos) ? "" : filepath.substr(0, last_slash);
+        string filename = (last_slash == string::npos) ? filepath : filepath.substr(last_slash + 1);
+        
+        dir_entries[dir].emplace_back(filename, mode, sha);
+    }
+    
+    map<string, string> dir_tree_shas;
+    
+    vector<string> dirs;
+    for (auto &kv : dir_entries) {
+        dirs.push_back(kv.first);
+    }
+    sort(dirs.begin(), dirs.end(), [](const string &a, const string &b) {
+        return count(a.begin(), a.end(), '/') > count(b.begin(), b.end(), '/');
+    });
+    
+    for (const string &dir : dirs) {
+        vector<tuple<string,string,string>> tree_entries = dir_entries[dir];
+        
+        for (auto &entry : tree_entries) {
+            string name = get<0>(entry);
+            string mode = get<1>(entry);
+            string sha = get<2>(entry);
+            
+            string child_dir = dir.empty() ? name : dir + "/" + name;
+            if (dir_tree_shas.find(child_dir) != dir_tree_shas.end()) {
+                get<1>(entry) = "40000";
+                get<2>(entry) = dir_tree_shas[child_dir];
+            }
         }
+        
+        sort(tree_entries.begin(), tree_entries.end(),
+            [](const auto &a, const auto &b) { return get<0>(a) < get<0>(b); });
+        
+        ostringstream ss;
+        for (auto &e : tree_entries) {
+            ss << get<1>(e) << " " << get<0>(e) << '\t' << get<2>(e) << '\n';
+        }
+        string tree_data = ss.str();
+        string tree_sha = hash_object_from_data("tree", tree_data, true);
+        dir_tree_shas[dir] = tree_sha;
     }
-    closedir(dp);
-    sort(entries.begin(), entries.end(), [](const auto &a, const auto &b){ return get<0>(a) < get<0>(b); });
-    ostringstream ss;
-    for (auto &e: entries) {
-        ss << get<1>(e) << " " << get<0>(e) << '\t' << get<2>(e) << '\n';
-    }
-    string tree_data = ss.str();
-    string tree_sha = hash_object_from_data("tree", tree_data, true);
-    return tree_sha;
+    
+    return dir_tree_shas[""];
+}
+
+string write_tree_recursive(const string &path) {
+    vector<tuple<string,string,string>> entries = read_index();
+    return build_tree_from_index_entries(entries);
 }
