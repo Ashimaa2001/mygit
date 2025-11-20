@@ -241,3 +241,38 @@ int cmd_commit(const vector<string> &args) {
     cout << commit_sha << "\n";
     return 0;
 }
+
+int cmd_log(const vector<string> &args) {
+    if (!repo_exists()) {
+        cerr << "fatal: not a mygit repository\n";
+        return 1;
+    }
+
+    string head_ref = read_head();
+    if (head_ref.empty()) {
+        cerr << "fatal: no HEAD\n";
+        return 1;
+    }
+
+    string current_sha = read_ref(head_ref);
+    if (current_sha.empty()) {
+        cerr << "fatal: no commits on this branch\n";
+        return 1;
+    }
+
+    int count = 0;
+    while (!current_sha.empty() && count < 100) {  
+        auto p = read_object(current_sha);
+        if (p.first.empty() || p.first != "commit") {
+            break;
+        }
+        CommitInfo info = parse_commit(p.second);
+        cout << "commit " << current_sha << "\n";
+        cout << "Author: " << info.author << "\n";
+        cout << "Message: " << info.message << "\n";
+        cout << "\n";
+        current_sha = info.parent;
+        count++;
+    }
+    return 0;
+}

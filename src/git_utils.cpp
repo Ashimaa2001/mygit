@@ -332,3 +332,25 @@ string create_commit_object(const string &tree_sha, const string &message, const
     string commit_data = ss.str();
     return hash_object_from_data("commit", commit_data, true);
 }
+
+CommitInfo parse_commit(const string &commit_data) {
+    CommitInfo info;
+    istringstream ss(commit_data);
+    string line;
+    bool reading_message = false;
+    while (getline(ss, line)) {
+        if (reading_message) {
+            info.message += line + "\n";
+        } else if (line.empty()) {
+            reading_message = true;
+        } else if (line.find("parent ") == 0) {
+            info.parent = line.substr(7);  
+        } else if (line.find("author ") == 0) {
+            info.author = line.substr(7);
+        }
+    }
+    if (!info.message.empty() && info.message.back() == '\n') {
+        info.message.pop_back();
+    }
+    return info;
+}

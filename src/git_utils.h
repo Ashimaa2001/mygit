@@ -46,4 +46,6 @@ struct CommitInfo {
     string message;
 };
 
+CommitInfo parse_commit(const string &commit_data);
+
 #endif // GIT_UTILS_H

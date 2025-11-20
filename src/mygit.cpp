@@ -26,5 +26,7 @@ int main(int argc, char **argv) {
         return cmd_add(args);
     } else if (cmd == "commit") {
         return cmd_commit(args);
+    } else if (cmd == "log") {
+        return cmd_log(args);
     }
 }
