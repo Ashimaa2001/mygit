@@ -354,3 +354,124 @@ CommitInfo parse_commit(const string &commit_data) {
     }
     return info;
 }
+
+// Extract tree SHA from a commit object
+static string get_tree_sha_from_commit(const string &commit_sha) {
+    auto p = read_object(commit_sha);
+    if (p.first.empty() || p.first != "commit") return string();
+    
+    istringstream ss(p.second);
+    string line;
+    while (getline(ss, line)) {
+        if (line.find("tree ") == 0) {
+            return line.substr(5);  
+        }
+    }
+    return string();
+}
+
+// Helper to recursively collect files from tree
+void collect_tree_files(const string &tree_sha, const string &prefix, unordered_map<string, string> &tree_files) {
+    auto p = read_object(tree_sha);
+    if (p.first.empty() || p.first != "tree") return;
+    
+    istringstream ss(p.second);
+    string line;
+    while (getline(ss, line)) {
+        if (line.empty()) continue;
+        size_t tab = line.find('\t');
+        if (tab == string::npos) continue;
+        string left = line.substr(0, tab);
+        string entry_sha = line.substr(tab + 1);
+        
+        size_t sp = left.find(' ');
+        if (sp == string::npos) continue;
+        string mode = left.substr(0, sp);
+        string name = left.substr(sp + 1);
+        
+        string full_path = prefix.empty() ? name : prefix + "/" + name;
+        
+        if (mode == "40000") {
+            collect_tree_files(entry_sha, full_path, tree_files);
+        } else {
+            tree_files[full_path] = entry_sha;
+        }
+    }
+}
+
+// Helper to collect current working files (excluding hidden)
+static void collect_current_files(const string &path, const string &prefix, unordered_set<string> &current_files) {
+    filesystem::path fp(path);
+    try {
+        for (auto &entry: filesystem::directory_iterator(fp)) {
+            string filename = entry.path().filename().string();
+            if (filename[0] == '.') continue;  
+            
+            string full_path = prefix.empty() ? filename : prefix + "/" + filename;
+            if (filesystem::is_directory(entry.path())) {
+                collect_current_files(entry.path().string(), full_path, current_files);
+            } else if (filesystem::is_regular_file(entry.path())) {
+                current_files.insert(full_path);
+            }
+        }
+    } catch (...) {}
+}
+
+vector<CheckoutChange> plan_checkout(const string &target_tree_sha, const string &current_commit_sha) {
+    vector<CheckoutChange> changes;
+    
+    unordered_map<string, string> current_tree_files;
+    if (!current_commit_sha.empty()) {
+        string current_tree_sha = get_tree_sha_from_commit(current_commit_sha);
+        if (!current_tree_sha.empty()) {
+            collect_tree_files(current_tree_sha, "", current_tree_files);
+        }
+    }
+    
+    unordered_map<string, string> target_tree_files;
+    collect_tree_files(target_tree_sha, "", target_tree_files);
+    
+    for (auto &kv: target_tree_files) {
+        const string &path = kv.first;
+        const string &target_sha = kv.second;
+        
+        auto it = current_tree_files.find(path);
+        if (it == current_tree_files.end()) {
+            changes.push_back({"restore", path});
+        } else if (it->second != target_sha) {
+            // File exists but with different content (different SHA)
+            changes.push_back({"restore", path});
+        }
+    }
+    
+    for (auto &kv: current_tree_files) {
+        const string &path = kv.first;
+        if (target_tree_files.find(path) == target_tree_files.end()) {
+            changes.push_back({"delete", path});
+        }
+    }
+    
+    return changes;
+}
+
+vector<CheckoutChange> plan_checkout(const string &tree_sha, bool dry_run) {
+    vector<CheckoutChange> changes;
+    
+    unordered_map<string, string> tree_files;
+    collect_tree_files(tree_sha, "", tree_files);
+    
+    unordered_set<string> current_files;
+    collect_current_files(".", "", current_files);
+    
+    for (auto &kv: tree_files) {
+        changes.push_back({"restore", kv.first});
+    }
+    
+    for (auto &f: current_files) {
+        if (tree_files.find(f) == tree_files.end()) {
+            changes.push_back({"delete", f});
+        }
+    }
+    
+    return changes;
+}

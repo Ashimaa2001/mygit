@@ -276,3 +276,163 @@ int cmd_log(const vector<string> &args) {
     }
     return 0;
 }
+
+int cmd_checkout(const vector<string> &args) {
+    if (!repo_exists()) {
+        cerr << "fatal: not a mygit repository\n";
+        return 1;
+    }
+    if (args.size() < 1) {
+        cerr << "usage: mygit checkout [--dry-run] <commit_sha>\n";
+        return 1;
+    }
+    
+    bool dry_run = false;
+    string target_commit_sha;
+    
+    if (args.size() >= 2 && args[0] == "--dry-run") {
+        dry_run = true;
+        target_commit_sha = args[1];
+    } else {
+        target_commit_sha = args[0];
+    }
+    
+    auto target_commit_obj = read_object(target_commit_sha);
+    if (target_commit_obj.first.empty()) {
+        cerr << "error: commit not found: " << target_commit_sha << "\n";
+        return 1;
+    }
+    if (target_commit_obj.first != "commit") {
+        cerr << "error: object is not a commit: " << target_commit_sha << "\n";
+        return 1;
+    }
+    
+    istringstream ss(target_commit_obj.second);
+    string line;
+    string target_tree_sha;
+    while (getline(ss, line)) {
+        if (line.find("tree ") == 0) {
+            target_tree_sha = line.substr(5);
+            break;
+        }
+    }
+    
+    if (target_tree_sha.empty()) {
+        cerr << "error: no tree found in commit\n";
+        return 1;
+    }
+    
+    string head_ref = read_head();
+    string current_commit_sha;
+    if (!head_ref.empty() && head_ref.find("refs/") != string::npos) {
+        current_commit_sha = read_ref(head_ref);
+    }
+    
+    vector<CheckoutChange> changes = plan_checkout(target_tree_sha, current_commit_sha);
+    
+    // DEBUG: Show what's in each tree
+    cerr << "\n[DEBUG] Tree contents:\n";
+    unordered_map<string, string> target_files, current_files;
+    collect_tree_files(target_tree_sha, "", target_files);
+    if (!current_commit_sha.empty()) {
+        string current_tree_sha;
+        auto curr_commit = read_object(current_commit_sha);
+        if (!curr_commit.first.empty()) {
+            istringstream css(curr_commit.second);
+            string cline;
+            while (getline(css, cline)) {
+                if (cline.find("tree ") == 0) {
+                    current_tree_sha = cline.substr(5);
+                    break;
+                }
+            }
+            if (!current_tree_sha.empty()) {
+                collect_tree_files(current_tree_sha, "", current_files);
+            }
+        }
+    }
+    cerr << "  Target tree files (" << target_files.size() << "): ";
+    for (auto &kv : target_files) cerr << kv.first << " ";
+    cerr << "\n";
+    cerr << "  Current tree files (" << current_files.size() << "): ";
+    for (auto &kv : current_files) cerr << kv.first << " ";
+    cerr << "\n";
+    cerr << "\n";
+    
+    cout << "Checkout plan for commit " << target_commit_sha.substr(0, 7) << ":\n";
+    cout << "Target tree SHA: " << target_tree_sha.substr(0, 7) << "\n";
+    cout << "Current commit SHA: " << (current_commit_sha.empty() ? "none" : current_commit_sha.substr(0, 7)) << "\n";
+    cout << "\n";
+    
+    int restore_count = 0, delete_count = 0;
+    for (auto &change: changes) {
+        if (change.action == "restore") {
+            cout << "  restore: " << change.path << "\n";
+            restore_count++;
+        } else if (change.action == "delete") {
+            cout << "  delete:  " << change.path << "\n";
+            delete_count++;
+        }
+    }
+    
+    cout << "\n";
+    cout << "Summary: " << restore_count << " files to restore, " << delete_count << " files to delete\n";
+    cout << "\n";
+    
+    if (dry_run) {
+        cout << "(dry-run: no files modified)\n";
+        return 0;
+    }
+    
+    cout << "Applying changes...\n";
+    
+    unordered_map<string, string> target_tree_files;
+    collect_tree_files(target_tree_sha, "", target_tree_files);
+    
+    for (auto &change: changes) {
+        if (change.action == "restore") {
+            const string &path = change.path;
+            string blob_sha = target_tree_files[path];
+            
+            // Create parent directories
+            size_t last_slash = path.rfind('/');
+            if (last_slash != string::npos) {
+                string dir = path.substr(0, last_slash);
+                ensure_dir(dir);
+            }
+            
+            auto blob_obj = read_object(blob_sha);
+            if (blob_obj.first.empty()) {
+                cerr << "error: failed to read blob: " << blob_sha << "\n";
+                continue;
+            }
+            write_file(path, blob_obj.second);
+        } else if (change.action == "delete") {
+            const string &path = change.path;
+            
+            if (filesystem::exists(path)) {
+                try {
+                    filesystem::remove(path);
+                } catch (...) {
+                    cerr << "warning: failed to delete: " << path << "\n";
+                }
+            }
+        }
+    }
+    
+    // Update HEAD to point to the new commit
+    if (!write_ref(head_ref, target_commit_sha)) {
+        cerr << "error: failed to update HEAD\n";
+        return 1;
+    }
+    
+    // Update index to match target tree
+    vector<tuple<string,string,string>> index_entries;
+    for (auto &kv: target_tree_files) {
+        index_entries.emplace_back(kv.first, "100644", kv.second);
+    }
+    write_index(index_entries);
+    
+    cout << "Checkout complete! HEAD detached at " << target_commit_sha.substr(0, 7) << "\n";
+    return 0;
+}

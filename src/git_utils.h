@@ -31,6 +31,7 @@ bool repo_exists();
 string write_tree_recursive(const string &path);
 vector<tuple<string,string,string>> read_index();
 string build_tree_from_index_entries(const vector<tuple<string,string,string>> &entries);
+bool write_index(const vector<tuple<string,string,string>> &entries);
 
 string build_tree_from_index();  
 bool add_files_to_index(const vector<string> &files);
@@ -47,5 +48,14 @@ struct CommitInfo {
 };
 
 CommitInfo parse_commit(const string &commit_data);
+
+
+void collect_tree_files(const string &tree_sha, const string &prefix, unordered_map<string, string> &tree_files);
+
+struct CheckoutChange {
+    string action;  // "restore", "delete"
+    string path;
+};
+vector<CheckoutChange> plan_checkout(const string &target_tree_sha, const string &current_commit_sha);
 
 #endif // GIT_UTILS_H

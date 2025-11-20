@@ -43,4 +43,11 @@ make clean
 # Commit staged files
 ./mygit commit -m "<message>"  # Commit with message
 ./mygit commit                 # Commit (reads message from stdin)
+
+# View commit history
+./mygit log [<commit_sha>]     # Show commit log from a commit
+
+# Checkout a commit
+./mygit checkout <commit_sha>              # Checkout specific commit
+./mygit checkout --dry-run <commit_sha>    # Preview changes without applying
 ```

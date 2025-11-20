@@ -28,5 +28,10 @@ int main(int argc, char **argv) {
         return cmd_commit(args);
     } else if (cmd == "log") {
         return cmd_log(args);
+    } else if (cmd == "checkout") {
+        return cmd_checkout(args);
+    } else {
+        std::cerr << "unknown command: " << cmd << "\n";
+        return 1;
     }
 }

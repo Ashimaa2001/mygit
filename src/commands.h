@@ -12,5 +12,6 @@ int cmd_ls_tree(const std::vector<std::string> &args);
 int cmd_add(const std::vector<std::string> &args);
 int cmd_commit(const std::vector<std::string> &args);
 int cmd_log(const std::vector<std::string> &args);
+int cmd_checkout(const std::vector<std::string> &args);
 
 #endif // COMMANDS_H
